@@ -19,6 +19,13 @@ _COMTRADE_RENAME = {
     'China, Hong Kong SAR': 'Hong Kong',     # Shorten for map labels
     'Viet Nam':             'Vietnam',       # Localise spelling
 }
+_COMTRADE_COLS = ['reporterDesc','reporterISO','partnerDesc','partnerISO','period','primaryValue']
+YEARS_STR = ','.join(str(y) for y in range(2018, 2026))   # 2018-2025, one API call (8 periods, cap is 12)
+
+# Reporter code lists — named once, reused by every loader that needs them
+IC_REPORTER_CODES    = '156,490,410,842,392'   # China, Taiwan, S.Korea, USA, Japan
+EQUIP_REPORTER_CODES = '528,842,392,276,410'   # Netherlands, USA, Japan, Germany, S.Korea
+HUB_REPORTER_CODES   = '344,458,702,704'       # Hong Kong, Malaysia, Singapore, Vietnam
 
 def _fix_taiwan_iso(df):
     """'Other Asia, nes' (Comtrade code 490 = Taiwan) has no standard ISO3 —
@@ -32,73 +39,87 @@ def _fix_taiwan_iso(df):
     return df
 
 @st.cache_data
-def load_global_data():
-    key   = st.secrets["COMTRADE_KEY"]
-    years = ','.join(str(y) for y in range(2018, 2026))
-    df    = comtrade.getFinalData(
+def fetch_comtrade(cmd_code, reporter_code=None, partner_code=None, years=YEARS_STR):
+    """Generic, cached Comtrade pull. Streamlit caches on the exact argument
+    combination, so calling this with different params for different views
+    never re-hits the API for a combination already fetched this session.
+      reporter_code=None      → all reporters (needed for exporter ranking)
+      partner_code=None       → full bilateral detail (needed for map/Sankey)
+      partner_code='0'        → World aggregate only (needed for ranking —
+                                 this is what makes the pull a ranking pull)
+    """
+    key = st.secrets["COMTRADE_KEY"]
+    return comtrade.getFinalData(
         key, typeCode='C', freqCode='A', clCode='HS', period=years,
-        reporterCode='156,490,410,842,392',
-        cmdCode='8542', flowCode='X',
-        partnerCode=None, partner2Code=None, customsCode=None, motCode=None,
+        reporterCode=reporter_code, cmdCode=cmd_code, flowCode='X',
+        partnerCode=partner_code, partner2Code=None, customsCode=None, motCode=None,
         maxRecords=250000, format_output='JSON', aggregateBy=None,
         breakdownMode='classic', countOnly=None, includeDesc=True
     )
-    cols = ['reporterDesc','reporterISO','partnerDesc','partnerISO','period','primaryValue']
-    df   = df[cols].copy()
-    df   = df[df['partnerISO'] != 'W00']
+
+@st.cache_data
+def clean_comtrade(df, keep_world_rows=False):
+    """Shared post-processing for every Comtrade pull: column selection,
+    renaming, Taiwan ISO fix, numeric coercion.
+      keep_world_rows=False (default) drops partner='World' rows (ISO 'W00')
+      — needed for bilateral views (map/Sankey), where every row must have
+      a real destination to draw an arc to.
+      keep_world_rows=True keeps them — needed for the exporter ranking,
+      where the World-aggregate row IS the number we want (each reporter's
+      total exports to World)."""
+    df = df[_COMTRADE_COLS].copy()
+    if not keep_world_rows:
+        df = df[df['partnerISO'] != 'W00']
     df['reporterDesc'] = df['reporterDesc'].replace(_COMTRADE_RENAME)
     df['partnerDesc']  = df['partnerDesc'].replace(_COMTRADE_RENAME)
     df = _fix_taiwan_iso(df)
     df['primaryValue'] = pd.to_numeric(df['primaryValue'], errors='coerce')
     return df
 
-@st.cache_data
+def load_global_data():
+    return clean_comtrade(fetch_comtrade('8542', reporter_code=IC_REPORTER_CODES))
+
 def load_global_equip_data():
     """HS 8486: semiconductor equipment exports from the five major tool makers."""
-    key   = st.secrets["COMTRADE_KEY"]
-    years = ','.join(str(y) for y in range(2018, 2026))
-    df    = comtrade.getFinalData(
-        key, typeCode='C', freqCode='A', clCode='HS', period=years,
-        reporterCode='528,842,392,276,410',
-        cmdCode='8486', flowCode='X',
-        partnerCode=None, partner2Code=None, customsCode=None, motCode=None,
-        maxRecords=250000, format_output='JSON', aggregateBy=None,
-        breakdownMode='classic', countOnly=None, includeDesc=True
-    )
-    cols = ['reporterDesc','reporterISO','partnerDesc','partnerISO','period','primaryValue']
-    df   = df[cols].copy()
-    df   = df[df['partnerISO'] != 'W00']
-    df['reporterDesc'] = df['reporterDesc'].replace(_COMTRADE_RENAME)
-    df['partnerDesc']  = df['partnerDesc'].replace(_COMTRADE_RENAME)
-    df = _fix_taiwan_iso(df)
-    df['primaryValue'] = pd.to_numeric(df['primaryValue'], errors='coerce')
-    return df
+    return clean_comtrade(fetch_comtrade('8486', reporter_code=EQUIP_REPORTER_CODES))
 
-@st.cache_data
 def load_reexport_data():
     """HS 8542: IC exports from key intermediate re-export / transit hubs.
     These countries receive chips from primary exporters and onward-ship
     to final assembly markets. Showing their outbound flows reveals the
     second hop of the supply chain (Singapore → Mexico, HK → SE Asia, etc.)
     """
-    key   = st.secrets["COMTRADE_KEY"]
-    years = ','.join(str(y) for y in range(2018, 2026))
-    df    = comtrade.getFinalData(
-        key, typeCode='C', freqCode='A', clCode='HS', period=years,
-        reporterCode='344,458,702,704',   # HKG, MYS, SGP, VNM
-        cmdCode='8542', flowCode='X',
-        partnerCode=None, partner2Code=None, customsCode=None, motCode=None,
-        maxRecords=250000, format_output='JSON', aggregateBy=None,
-        breakdownMode='classic', countOnly=None, includeDesc=True
+    return clean_comtrade(fetch_comtrade('8542', reporter_code=HUB_REPORTER_CODES))
+
+def load_exporter_ranking(cmd_code):
+    """ALL reporters, World-aggregate only — each country's total exports to
+    the world for this HS code. This is the input for the top-N ranking bar
+    chart, and it's deliberately NOT restricted to the pre-picked country
+    lists above: the point is to check who actually shows up, not re-display
+    who we already chose."""
+    return clean_comtrade(
+        fetch_comtrade(cmd_code, reporter_code=None, partner_code='0'),
+        keep_world_rows=True,
     )
-    cols = ['reporterDesc','reporterISO','partnerDesc','partnerISO','period','primaryValue']
-    df   = df[cols].copy()
-    df   = df[df['partnerISO'] != 'W00']
-    df['reporterDesc'] = df['reporterDesc'].replace(_COMTRADE_RENAME)
-    df['partnerDesc']  = df['partnerDesc'].replace(_COMTRADE_RENAME)
-    df = _fix_taiwan_iso(df)
-    df['primaryValue'] = pd.to_numeric(df['primaryValue'], errors='coerce')
-    return df
+
+@st.cache_data
+def rank_top_exporters(df, n=15, max_year=2024):
+    """Cumulative ranking across years (not year-by-year): sum each
+    reporter's exports over the window, then express every reporter's total
+    as a percentage share of the sum of ALL reporters' totals. E.g. if
+    Taiwan's summed exports are 500 and every reporter's summed exports
+    together add up to 2000, Taiwan's share_pct is 500 / 2000 * 100 = 25%.
+    Excludes 2025 by default — reporting coverage for these HS codes
+    collapses in 2025 (see earlier coverage-check work in the notebook)."""
+    d = df[df['period'].astype(int) <= max_year]
+    ranked = (
+        d.groupby('reporterDesc')['primaryValue'].sum()
+        .sort_values(ascending=False)
+        .reset_index()
+    )
+    ranked['share_pct'] = 100 * ranked['primaryValue'] / ranked['primaryValue'].sum()
+    ranked['value_usd_bn'] = ranked['primaryValue'] / 1e9
+    return ranked.head(n)
 
 # ── Canonical colour palette ───────────────────────────────────────────────
 # Single canonical palette used by BOTH maps, both projections, and every
@@ -535,11 +556,40 @@ def build_sankey_fig(df_flow, hex_palette):
     )
     return fig
 
+@st.cache_data
+def build_ranking_bar_fig(ranked_df, highlight_hex, title):
+    """Horizontal bar, top-N exporters by cumulative share. Countries already
+    in our named palette (the ones the app lets you toggle) keep their
+    canonical colour; every other country renders in neutral grey — so the
+    chart doubles as a check on whether the pre-picked country list actually
+    matches who shows up, not just a re-display of it."""
+    d = ranked_df.sort_values('share_pct', ascending=True)   # ascending: Plotly draws bottom-up
+    colors = [highlight_hex.get(c, '#94A3B8') for c in d['reporterDesc']]
+    fig = go.Figure(go.Bar(
+        x=d['share_pct'], y=d['reporterDesc'], orientation='h',
+        marker=dict(color=colors),
+        text=d['share_pct'].round(1).astype(str) + '%',
+        textposition='outside',
+        customdata=d['value_usd_bn'].round(1),
+        hovertemplate='%{y}<br>%{customdata:.1f}B, %{x:.1f}% share<extra></extra>',
+    ))
+    fig.update_layout(
+        title=title,
+        xaxis_title='Share of world exports, 2018–2024 (%)',
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(gridcolor='rgba(0,0,0,0.08)'),
+        margin=dict(t=50, l=10, r=40, b=10),
+        height=max(320, len(d) * 34),
+    )
+    return fig
+
 # ── Load all data ──────────────────────────────────────────────────────────
 with st.spinner("Loading UN Comtrade data. This may take a moment on first load..."):
     df_global       = load_global_data()
     df_global_equip = load_global_equip_data()
     df_reexport     = load_reexport_data()   # IC exports from intermediate hubs (HKG, SGP, MYS, VNM)
+    ic_ranking      = rank_top_exporters(load_exporter_ranking('8542'))
+    equip_ranking   = rank_top_exporters(load_exporter_ranking('8486'))
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 st.sidebar.title("Controls")
@@ -749,6 +799,18 @@ else:
 st.markdown("---")
 st.subheader("Act 1 — Concentration: who exports, and where it lands")
 st.caption(
+    "Top 15 exporters worldwide (all Comtrade reporters, not just the five tracked "
+    "below) by share of global HS 8542 exports, summed 2018–2024. Coloured bars are "
+    "the five nations tracked elsewhere in this app; grey bars are everyone else who "
+    "shows up in the global ranking — this is the check on whether that five-country "
+    "list is actually the right one."
+)
+st.plotly_chart(
+    build_ranking_bar_fig(ic_ranking, country_hex, "Top 15 IC (HS 8542) Exporters, 2018–2024"),
+    width='stretch',
+)
+
+st.caption(
     f"Left: {len(IC_EXPORTERS)} major IC-exporting nations. "
     "Right: their top 15 import destinations for the selected year. "
     "Producer nations appear on both sides — China, Korea, Taiwan, the USA and Japan "
@@ -819,6 +881,10 @@ st.caption(
     "equipment makers (Applied Materials, Lam Research, KLA in the US; Tokyo "
     "Electron, Screen in Japan) are stacked into one reporter, against ASML alone "
     "for the Netherlands. Read this as company-count composition, not technology leadership."
+)
+st.plotly_chart(
+    build_ranking_bar_fig(equip_ranking, country_hex, "Top 15 Equipment (HS 8486) Exporters, 2018–2024"),
+    width='stretch',
 )
 st.caption(
     "Exports of lithography machines (EUV/DUV), etch tools, deposition systems, and metrology. "
