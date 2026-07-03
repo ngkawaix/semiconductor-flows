@@ -646,10 +646,51 @@ st.sidebar.markdown(
     "**Flow:** Gross exports (reporter-side, HS classification)"
 )
 
+@st.cache_data
+def china_bound_totals(df, exporters, year_a, year_b):
+    """Sum of exports FROM the given exporters TO China only (not their
+    total world exports), for two specific years. This is the number the
+    top-of-page narrative needs — 'exports to China' — which is different
+    from both df_global's total-exports-by-country and the china_share
+    metric (China's own exports as a % of tracked total)."""
+    d = df[
+        (df['reporterDesc'].isin(exporters)) &
+        (df['reporterDesc'] != 'China') &      # exclude China as its own destination
+        (df['partnerDesc'] == 'China')
+    ]
+    by_year = d.groupby('period')['primaryValue'].sum()
+    val_a = by_year.get(str(year_a), 0.0)
+    val_b = by_year.get(str(year_b), 0.0)
+    pct_change = ((val_b - val_a) / val_a * 100) if val_a else None
+    return val_a, val_b, pct_change
+
 st.title("Global Semiconductor Trade Flows")
-st.caption(
-    "**The Oct 2022 US export controls didn't shrink global chip trade — they "
-    "reorganised it.** Explore the flows, the concentration, and the routing below."
+st.markdown(
+    "This dashboard pulls data from the UN Comtrade to analyse semiconductor trade data up to 2024. "
+    "While datasets up till 2025 exist, several key countries such as China and Taiwan have yet to "
+    "report. Hence, the dataset is only as coherent up till 2024. Nevertheless, the story it tells is "
+    "illuminating. Since the US has imposed the Export Controls on Advanced Computing and Semiconductors "
+    "in October 2022, IC and Semiconductor Equipment exports to China has slowed."
+)
+
+_ic_china_2022, _ic_china_2024, _ic_china_pct       = china_bound_totals(df_global,       selected_countries,       2022, 2024)
+_eq_china_2022, _eq_china_2024, _eq_china_pct       = china_bound_totals(df_global_equip, selected_equip_countries, 2022, 2024)
+
+n1, n2 = st.columns(2)
+n1.metric(
+    "IC exports to China (tracked exporters), 2022 → 2024",
+    fmt(_ic_china_2024),
+    delta=f"{_ic_china_pct:+.1f}% vs. 2022" if _ic_china_pct is not None else None,
+    help="Sum of HS 8542 exports FROM the tracked IC exporters TO China specifically "
+         "(not their total world exports). 2022 = the year the Oct 2022 export "
+         "controls took effect, used here as the pre-control baseline."
+)
+n2.metric(
+    "Equipment exports to China (tracked exporters), 2022 → 2024",
+    fmt(_eq_china_2024),
+    delta=f"{_eq_china_pct:+.1f}% vs. 2022" if _eq_china_pct is not None else None,
+    help="Sum of HS 8486 exports FROM the tracked equipment exporters TO China "
+         "specifically (not their total world exports)."
 )
 
 # ══ ACT 1 — CONCENTRATION ═══════════════════════════════════════════════
