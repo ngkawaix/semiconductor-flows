@@ -835,14 +835,8 @@ if selected_countries and not df_year.empty:
 else:
     st.info("Select at least one IC exporter in the sidebar to display the map.")
 
-st.markdown("---")
-st.subheader("Act 1 — Concentration: who exports, and where it lands")
-st.caption(
-    "Top 15 exporters worldwide (all Comtrade reporters, not just the five tracked "
-    "below) by share of global HS 8542 exports, summed 2018–2024. Colour intensity "
-    "tracks share size — this is the check on whether the five-country list tracked "
-    "elsewhere in this app is actually the right one."
-)
+st.divider()
+
 st.plotly_chart(
     build_ranking_bar_fig(ic_ranking, "Top 15 IC (HS 8542) Exporters, 2018–2024"),
     width='stretch',
@@ -874,14 +868,8 @@ else:
     st.info("Select at least one IC exporter in the sidebar to display the Sankey.")
 
 ##  IC Export Trends by Country
-st.markdown("---")
-st.subheader("Act 2 — Routing: did trade shrink, or just reroute?")
-st.caption(
-    "Watch each country's trajectory around the Oct 2022 dashed line. "
-    "For the re-export routing angle — how much of this flow now passes through "
-    "intermediate hubs like Hong Kong before reaching its final destination — "
-    "toggle **IC Re-export Hubs** in the sidebar and re-look at the map above."
-)
+st.divider()
+
 df_trend = (
     df_global[df_global['reporterDesc'].isin(selected_countries)]
     .groupby(['reporterDesc','period'])['primaryValue'].sum().reset_index()
@@ -911,15 +899,8 @@ st.plotly_chart(fig_ts, width='stretch')
 
 # ══ SUPPORTING DATA — SEMICONDUCTOR EQUIPMENT (HS 8486) ═════════════════
 st.divider()
-st.header("⚙️ Supporting data: Semiconductor Equipment (HS 8486)")
-st.caption(
-    "A secondary lens, not a ranking of dominance. The Netherlands (ASML) leads "
-    "in the single highest-value tool — EUV lithography — but the country-level "
-    "totals below can show the USA or Japan ahead simply because several large "
-    "equipment makers (Applied Materials, Lam Research, KLA in the US; Tokyo "
-    "Electron, Screen in Japan) are stacked into one reporter, against ASML alone "
-    "for the Netherlands. Read this as company-count composition, not technology leadership."
-)
+st.header("⚙️ Semiconductor Equipment (HS 8486)")
+
 st.plotly_chart(
     build_ranking_bar_fig(equip_ranking, "Top 15 Equipment (HS 8486) Exporters, 2018–2024"),
     width='stretch',
