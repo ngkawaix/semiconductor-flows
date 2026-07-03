@@ -38,7 +38,7 @@ def _fix_taiwan_iso(df):
     df.loc[df['partnerDesc']  == 'Taiwan', 'partnerISO']  = 'TWN'
     return df
 
-@st.cache_data(show_spinner="Fetching UN Comtrade Data…")
+@st.cache_data
 def fetch_comtrade(cmd_code, reporter_code=None, partner_code=None, years=YEARS_STR):
     """Generic, cached Comtrade pull. Streamlit caches on the exact argument
     combination, so calling this with different params for different views
@@ -557,17 +557,15 @@ def build_sankey_fig(df_flow, hex_palette):
     return fig
 
 @st.cache_data
-def build_ranking_bar_fig(ranked_df, highlight_hex, title):
-    """Horizontal bar, top-N exporters by cumulative share. Countries already
-    in our named palette (the ones the app lets you toggle) keep their
-    canonical colour; every other country renders in neutral grey — so the
-    chart doubles as a check on whether the pre-picked country list actually
-    matches who shows up, not just a re-display of it."""
+def build_ranking_bar_fig(ranked_df, title):
+    """Horizontal bar, top-N exporters by cumulative share. Colour is a
+    continuous gradient (YlGnBu) keyed on share_pct itself, matching the
+    notebook's top10_composition_chart — darker/bluer bars simply mean a
+    bigger share, independent of which country it is."""
     d = ranked_df.sort_values('share_pct', ascending=True)   # ascending: Plotly draws bottom-up
-    colors = [highlight_hex.get(c, '#94A3B8') for c in d['reporterDesc']]
     fig = go.Figure(go.Bar(
         x=d['share_pct'], y=d['reporterDesc'], orientation='h',
-        marker=dict(color=colors),
+        marker=dict(color=d['share_pct'], colorscale='YlGnBu', showscale=False),
         text=d['share_pct'].round(1).astype(str) + '%',
         textposition='outside',
         customdata=d['value_usd_bn'].round(1),
@@ -800,13 +798,12 @@ st.markdown("---")
 st.subheader("Act 1 — Concentration: who exports, and where it lands")
 st.caption(
     "Top 15 exporters worldwide (all Comtrade reporters, not just the five tracked "
-    "below) by share of global HS 8542 exports, summed 2018–2024. Coloured bars are "
-    "the five nations tracked elsewhere in this app; grey bars are everyone else who "
-    "shows up in the global ranking — this is the check on whether that five-country "
-    "list is actually the right one."
+    "below) by share of global HS 8542 exports, summed 2018–2024. Colour intensity "
+    "tracks share size — this is the check on whether the five-country list tracked "
+    "elsewhere in this app is actually the right one."
 )
 st.plotly_chart(
-    build_ranking_bar_fig(ic_ranking, country_hex, "Top 15 IC (HS 8542) Exporters, 2018–2024"),
+    build_ranking_bar_fig(ic_ranking, "Top 15 IC (HS 8542) Exporters, 2018–2024"),
     width='stretch',
 )
 
@@ -883,7 +880,7 @@ st.caption(
     "for the Netherlands. Read this as company-count composition, not technology leadership."
 )
 st.plotly_chart(
-    build_ranking_bar_fig(equip_ranking, country_hex, "Top 15 Equipment (HS 8486) Exporters, 2018–2024"),
+    build_ranking_bar_fig(equip_ranking, "Top 15 Equipment (HS 8486) Exporters, 2018–2024"),
     width='stretch',
 )
 st.caption(
