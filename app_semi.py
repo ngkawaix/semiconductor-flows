@@ -673,25 +673,7 @@ st.markdown(
     "in October 2022, IC and Semiconductor Equipment exports to China has slowed."
 )
 
-_ic_china_2022, _ic_china_2024, _ic_china_pct       = china_bound_totals(df_global,       selected_countries,       2022, 2024)
-_eq_china_2022, _eq_china_2024, _eq_china_pct       = china_bound_totals(df_global_equip, selected_equip_countries, 2022, 2024)
-
-n1, n2 = st.columns(2)
-n1.metric(
-    "IC exports to China (tracked exporters), 2022 → 2024",
-    fmt(_ic_china_2024),
-    delta=f"{_ic_china_pct:+.1f}% vs. 2022" if _ic_china_pct is not None else None,
-    help="Sum of HS 8542 exports FROM the tracked IC exporters TO China specifically "
-         "(not their total world exports). 2022 = the year the Oct 2022 export "
-         "controls took effect, used here as the pre-control baseline."
-)
-n2.metric(
-    "Equipment exports to China (tracked exporters), 2022 → 2024",
-    fmt(_eq_china_2024),
-    delta=f"{_eq_china_pct:+.1f}% vs. 2022" if _eq_china_pct is not None else None,
-    help="Sum of HS 8486 exports FROM the tracked equipment exporters TO China "
-         "specifically (not their total world exports)."
-)
+st.divider()
 
 # ══ ACT 1 — CONCENTRATION ═══════════════════════════════════════════════
 st.header("🔬 Integrated Circuits (HS 8542)")
