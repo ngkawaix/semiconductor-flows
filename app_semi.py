@@ -38,7 +38,7 @@ def _fix_taiwan_iso(df):
     df.loc[df['partnerDesc']  == 'Taiwan', 'partnerISO']  = 'TWN'
     return df
 
-@st.cache_data
+@st.cache_data(show_spinner="Fetching UN Comtrade Data…")
 def fetch_comtrade(cmd_code, reporter_code=None, partner_code=None, years=YEARS_STR):
     """Generic, cached Comtrade pull. Streamlit caches on the exact argument
     combination, so calling this with different params for different views
