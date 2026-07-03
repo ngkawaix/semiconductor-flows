@@ -697,16 +697,12 @@ n2.metric(
 st.header("🔬 Integrated Circuits (HS 8542)")
 st.caption(
     "Exports from major IC-exporting nations. "
-    "Left = exporters, right = importers. "
-    "Arc width proportional to export value. Data: UN Comtrade."
+    "Left = exporters, right = importers. Data: UN Comtrade."
 )
-st.markdown(
-    "> **Why these countries?** These five nations account for the majority of global IC exports. "
-    "**Taiwan** (TSMC, MediaTek), **South Korea** (Samsung Electronics, SK Hynix), "
-    "**China** (SMIC, Hua Hong Semiconductor), **USA** (Intel, Texas Instruments), "
-    "**Japan** (Renesas, Kioxia, Sony Semiconductor). "
-    "The Netherlands appears in the Equipment section below instead — its semiconductor "
-    "story is ASML's lithography monopoly, not chip exports."
+
+st.plotly_chart(
+    build_ranking_bar_fig(ic_ranking, "Top 15 IC (HS 8542) Exporters, 2018–2024"),
+    width='stretch',
 )
 
 df_arcs = build_arc_df(df_global)
@@ -837,11 +833,6 @@ else:
 
 st.divider()
 
-st.plotly_chart(
-    build_ranking_bar_fig(ic_ranking, "Top 15 IC (HS 8542) Exporters, 2018–2024"),
-    width='stretch',
-)
-
 st.caption(
     f"Left: {len(IC_EXPORTERS)} major IC-exporting nations. "
     "Right: their top 15 import destinations for the selected year. "
@@ -897,18 +888,19 @@ fig_ts.update_layout(
 )
 st.plotly_chart(fig_ts, width='stretch')
 
-# ══ SUPPORTING DATA — SEMICONDUCTOR EQUIPMENT (HS 8486) ═════════════════
+# ══ SEMICONDUCTOR EQUIPMENT (HS 8486) ═════════════════
 st.divider()
 st.header("⚙️ Semiconductor Equipment (HS 8486)")
+st.caption(
+    "Exports of lithography machines (EUV/DUV), etch tools, deposition systems, and metrology. "
+    "Left = exporters, right = importers. Data: UN Comtrade."
+)
 
 st.plotly_chart(
     build_ranking_bar_fig(equip_ranking, "Top 15 Equipment (HS 8486) Exporters, 2018–2024"),
     width='stretch',
 )
-st.caption(
-    "Exports of lithography machines (EUV/DUV), etch tools, deposition systems, and metrology. "
-    "Left = exporters, right = importers. Data: UN Comtrade."
-)
+
 st.markdown(
     "> **Why these countries?** These five nations control the critical tooling that every chip fab depends on. "
     "**Netherlands** (ASML, sole maker of EUV lithography), "
