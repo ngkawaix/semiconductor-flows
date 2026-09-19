@@ -79,4 +79,4 @@ repository.
 
 ## Author
 
-Ng Ka Wai, [linkedin.com/in/ngkawaix](https://linkedin.com/in/ngkawaix)
+Ng Ka Wai
